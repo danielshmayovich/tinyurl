@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.handson.tinyurl.model.NewTinyRequest;
 import com.handson.tinyurl.model.User;
+import com.handson.tinyurl.model.UserClickOut;
+import com.handson.tinyurl.repository.UserClickRepository;
 import com.handson.tinyurl.repository.UserRepository;
 import com.handson.tinyurl.service.Redis;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,13 +18,21 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.util.Date;
+import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 import static com.handson.tinyurl.model.User.UserBuilder.anUser;
+import static com.handson.tinyurl.model.UserClick.UserClickBuilder.anUserClick;
+import static com.handson.tinyurl.model.UserClickKey.UserClickKeyBuilder.anUserClickKey;
 import static com.handson.tinyurl.util.Dates.getCurMonth;
+import static org.springframework.data.util.StreamUtils.createStreamFromIterator;
 
 @RestController
 public class AppController {
+    @Autowired
+    private UserClickRepository userClickRepository;
     @Autowired
     private UserRepository userRepository;
 
@@ -84,11 +94,21 @@ public class AppController {
                 incrementMongoField(userName, "allUrlClicks");
                 incrementMongoField(userName,
                         "shorts."  + tiny + ".clicks." + getCurMonth());
+        userClickRepository.save(anUserClick().userClickKey(anUserClickKey().withUserName(userName).withClickTime(new Date()).build())
+            .tiny(tiny).longUrl(tinyRequest.getLongUrl()).build());
             }
             return new ModelAndView("redirect:" + tinyRequest.getLongUrl());
         } else {
             throw new RuntimeException(tiny + " not found");
         }
+    }
+
+    @RequestMapping(value = "/user/{name}/clicks", method = RequestMethod.GET)
+    public List<UserClickOut> getUserClicks(@RequestParam String name) {
+        var userClicks = createStreamFromIterator( userClickRepository.findByUserName(name).iterator())
+                .map(userClick -> UserClickOut.of(userClick))
+                .collect(Collectors.toList());
+        return userClicks;
     }
 
 
